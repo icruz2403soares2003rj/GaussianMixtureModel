@@ -5,6 +5,10 @@ from sklearn.cluster import kmeans_plusplus
 
 from scipy.special import psi
 
+from scipy.special import softmax
+
+from scipy.stats import multivariate_t
+
 class GaussianMixtureModel:
 
     def __init__(self, X : np.ndarray, M : int):
@@ -102,10 +106,8 @@ class GaussianMixtureModel:
                 self.gamma[n, m] += self.E_log_det_Lambda[m]/2
 
                 self.gamma[n, m] -= (self.nu[m]*(self.X[n] - self.mu[m]).T @ self.Psi[m] @ (self.X[n] - self.mu[m]) + self.D/self.tau[m])/2
-
-        self.gamma = np.exp(self.gamma)
-
-        self.gamma /= np.expand_dims(self.gamma.sum(axis = 1), axis = 1)
+        
+        self.gamma = softmax(self.gamma, axis = 1)
 
     def update_N_barra(self) -> None:
 
@@ -199,7 +201,7 @@ class GaussianMixtureModel:
 
     def estimates_Sigma(self) -> None:
 
-        self.Sigma = self.Phi/(np.expand_dims(self.nu, axis = (1, 2)) - self.D - 1)
+        self.Sigma = self.Phi/(np.expand_dims(self.nu, axis = (1, 2)) + self.D + 1)
 
     def estimates_Lambda(self) -> None:
 
@@ -234,3 +236,23 @@ class GaussianMixtureModel:
                 break
 
         self.estimates_parameters()
+
+    def posterior_predictive(self, X : np.ndarray) -> np.ndarray:
+
+        PDF = 0
+
+        for m in range(self.M):
+
+            PDF += self.pi[m]*multivariate_t.pdf(
+
+                X, 
+                
+                loc = self.mu[m], 
+                
+                df = self.nu[m] + 1 - self.D, 
+                
+                shape = (1 + self.tau[m])/(self.tau[m]*(self.nu[m] + 1 - self.D))*self.Phi[m]
+
+            )
+
+        return PDF
